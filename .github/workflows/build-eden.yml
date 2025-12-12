@@ -1,0 +1,55 @@
+name: Build Eden from Release Source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      # 1) 下载 Release 源码压缩包
+      - name: Download latest Release source ZIP
+        uses: actions/download-release-asset@v2
+        with:
+          repository: eden-emulator/Releases
+          asset-name: "*Source*zip"
+          path: source
+
+      # 2) 解压到工作目录
+      - name: Extract source ZIP
+        run: |
+          powershell Expand-Archive -Path source/*.zip -DestinationPath eden-src
+
+      # 3) 设置 MSYS2 + MinGW-w64 环境
+      - name: Install MSYS2 + required packages
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            base-devel
+
+      # 4) 构建工程
+      - name: Build with CMake + Ninja
+        shell: msys2 {0}
+        run: |
+          cd eden-src
+          mkdir build
+          cd build
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
+          ninja
+
+      # 5) 上传产物
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eden-windows-x64
+          path: eden-src/build/
